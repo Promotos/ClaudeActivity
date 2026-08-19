@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Build products
+build/
+DerivedData/
+ClaudeActivity.app/
+*.dSYM/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
