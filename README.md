@@ -16,9 +16,29 @@ Click the icon to open a menu with the status per source, the time since the las
 
 ## Installation
 
-Requires the Xcode Command Line Tools (`xcode-select --install`). Nothing else — no dependencies, no Homebrew.
+### From a release
 
-### Option A — Xcode
+Download the `.dmg` from the [releases page](https://github.com/Promotos/ClaudeActivity/releases), open it and drag ClaudeActivity onto the Applications folder.
+
+Do that **before** starting it. An app launched straight out of the disk image or out of `~/Downloads` still carries the download quarantine, so macOS runs it from a temporary randomized path that disappears again — which also breaks "Start at Login", because the LaunchAgent would point at a path that no longer exists.
+
+On first launch macOS refuses with *"Apple could not verify that ClaudeActivity is free of malware"*. That is expected: the app is signed ad hoc, not with a paid Apple Developer ID, and is therefore not notarized. To allow it:
+
+1. In that dialog click **Done** — not *Move to Trash*.
+2. Open **System Settings → Privacy & Security** and scroll all the way down.
+3. Next to the note about ClaudeActivity, click **Open Anyway** and confirm with Touch ID or your password.
+
+If that line is not there, the blocked launch is no longer recent enough — macOS only offers the button for a while after the attempt. Try opening the app again, then look immediately.
+
+macOS then remembers the exception. It is tied to the app's signature rather than to its location, so the app keeps opening from anywhere — but a new release has a new signature, which means the three steps come back once per update. The same instructions ship inside the disk image.
+
+An icon in the menu bar is the only sign that it started — the app has no window and no Dock icon.
+
+### Building it yourself
+
+Requires the Xcode Command Line Tools (`xcode-select --install`). Nothing else — no dependencies, no Homebrew. A self-built app is not quarantined, so none of the above applies.
+
+#### Option A — Xcode
 
 ```bash
 open ClaudeActivity.xcodeproj
@@ -32,7 +52,7 @@ Building from the command line works too:
 xcodebuild -project ClaudeActivity.xcodeproj -scheme ClaudeActivity -configuration Release build
 ```
 
-### Option B — build script
+#### Option B — build script
 
 For a build without Xcode, only the Command Line Tools:
 
@@ -55,6 +75,7 @@ Resources/AppIcon.icns      the app icon
 docs/icon.png               the same artwork for this README
 ClaudeActivity.xcodeproj    Xcode project (one app target)
 build.sh                    swiftc build without Xcode
+make-dmg.sh                 packages the app into a disk image
 make-icon.swift             redraws Resources/AppIcon.icns
 ```
 
@@ -71,6 +92,29 @@ down, and writes `docs/icon.png` alongside it so the image above never drifts
 from the icon actually shipped. The colors and proportions sit at the top of
 `enum Icon`. The shapes are plain Bezier paths on purpose — Apple's license terms
 do not allow SF Symbols in app icons.
+
+## Releasing
+
+```bash
+./build.sh && ./make-dmg.sh
+```
+
+That produces `build/ClaudeActivity-<version>.dmg` holding the app, a symlink to
+`/Applications` for drag-and-drop installing, and a text file repeating the
+first-launch instructions from the Installation section — right where someone
+needs them.
+
+The app inside is signed ad hoc. Notarizing it, which would remove the
+first-launch prompt entirely, requires a paid Apple Developer Program membership
+and a Developer ID Application certificate; an Apple Development certificate is
+explicitly not enough. That trade is deliberate here: the prompt costs each user
+three clicks, once.
+
+Publish the image with:
+
+```bash
+gh release create v1.0 build/ClaudeActivity-1.0.dmg --title "ClaudeActivity 1.0" --notes "..."
+```
 
 ## How the detection works
 
