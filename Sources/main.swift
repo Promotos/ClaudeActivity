@@ -1,3 +1,18 @@
+//
+//  ClaudeActivity
+//  Copyright 2026 Promotos
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//
+
 import AppKit
 import Foundation
 
@@ -629,6 +644,12 @@ enum About {
         return short == build ? short : "\(short) (\(build))"
     }
 
+    /// Copyright line, read from the bundle so it has a single source.
+    /// Empty when running outside an app bundle.
+    static var copyright: String {
+        Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String ?? ""
+    }
+
     /// The repository URL as a real hyperlink.
     /// An NSTextField only follows a `.link` attribute when it is both selectable
     /// and allowed to edit text attributes — with either flag missing the text
@@ -661,7 +682,10 @@ enum About {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "ClaudeActivity \(version)"
-        alert.informativeText = "\(summary)\n\n\(warranty)"
+        var paragraphs = [summary]
+        if !copyright.isEmpty { paragraphs.append(copyright) }
+        paragraphs.append(warranty)
+        alert.informativeText = paragraphs.joined(separator: "\n\n")
         alert.accessoryView = linkView()
         alert.addButton(withTitle: "OK")
         return alert

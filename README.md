@@ -184,3 +184,9 @@ After changing anything, rebuild in Xcode or run `./build.sh` again.
 - With an active VPN or proxy, the process attribution from `nettop` can become inaccurate.
 
 For **usage and limits** (percentages, cost, remaining quota) there are ready-made apps that read `~/.claude` — for example [CCSeva](https://github.com/Iamshankhadeep/ccseva) or [TokenEater](https://github.com/AThevon/TokenEater). They run alongside this one without any problem.
+
+## License
+
+Copyright 2026 Promotos
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
