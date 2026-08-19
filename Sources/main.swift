@@ -607,6 +607,75 @@ enum LoginItem {
     }
 }
 
+// MARK: - About
+
+enum About {
+    static let repositoryURL = URL(string: "https://github.com/Promotos/ClaudeActivity")!
+
+    static let summary =
+        "Menu bar indicator that shows whether Claude is currently exchanging tokens — "
+        + "both in the Claude Desktop app and in Claude Code."
+
+    /// Apache-2.0 disclaimer, condensed to one sentence for the dialog.
+    static let warranty =
+        "Distributed on an \"AS IS\" basis, without warranties or conditions of any kind, "
+        + "either express or implied. See the LICENSE file for details."
+
+    /// "1.0" when marketing and build version match, otherwise "1.0 (7)".
+    static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return short == build ? short : "\(short) (\(build))"
+    }
+
+    /// The repository URL as a real hyperlink.
+    /// An NSTextField only follows a `.link` attribute when it is both selectable
+    /// and allowed to edit text attributes — with either flag missing the text
+    /// merely looks like a link and does nothing when clicked.
+    static func linkView() -> NSView {
+        let attributed = NSAttributedString(
+            string: repositoryURL.absoluteString,
+            attributes: [
+                .link: repositoryURL,
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.linkColor,
+                .underlineStyle: NSUnderlineStyle.single.rawValue
+            ])
+
+        let field = NSTextField(labelWithAttributedString: attributed)
+        field.isSelectable = true
+        field.allowsEditingTextAttributes = true
+        field.sizeToFit()
+        // NSAlert gives its accessory view a fixed width; keep the link from
+        // being clipped on the right.
+        field.frame = NSRect(x: 0, y: 0,
+                             width: max(field.frame.width, 280),
+                             height: field.frame.height)
+        return field
+    }
+
+    /// Builds the About panel. Kept separate from showing it so the layout can
+    /// be inspected without running a modal session.
+    static func makeAlert() -> NSAlert {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "ClaudeActivity \(version)"
+        alert.informativeText = "\(summary)\n\n\(warranty)"
+        alert.accessoryView = linkView()
+        alert.addButton(withTitle: "OK")
+        return alert
+    }
+
+    /// Shows the About panel. The app runs as an accessory, so it has to
+    /// activate itself first — otherwise the alert opens behind the
+    /// frontmost window.
+    static func showPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        makeAlert().runModal()
+    }
+}
+
 // MARK: - Icon rendering
 
 /// All icons are template images: macOS tints them to match the menu bar.
@@ -875,6 +944,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
 
+        let about = NSMenuItem(title: "About ClaudeActivity",
+                               action: #selector(showAbout(_:)), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit ClaudeActivity",
                               action: #selector(quit(_:)), keyEquivalent: "q")
         quit.target = self
@@ -928,6 +1004,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let hours = minutes / 60
         let rest = minutes % 60
         return rest == 0 ? "\(hours)h" : "\(hours)h \(rest)m"
+    }
+
+    @objc private func showAbout(_ sender: Any?) {
+        About.showPanel()
     }
 
     @objc private func toggleLoginItem(_ sender: NSMenuItem) {

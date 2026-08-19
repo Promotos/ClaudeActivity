@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		CA0000000000000000000101 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000201 /* main.swift */; };
+		CA0000000000000000000102 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000208 /* AppIcon.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -16,6 +17,7 @@
 		CA0000000000000000000203 /* ClaudeActivity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeActivity.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA0000000000000000000204 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		CA0000000000000000000205 /* build.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = build.sh; sourceTree = "<group>"; };
+		CA0000000000000000000208 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,6 +54,7 @@
 			isa = PBXGroup;
 			children = (
 				CA0000000000000000000202 /* Info.plist */,
+				CA0000000000000000000208 /* AppIcon.icns */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -130,6 +133,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA0000000000000000000102 /* AppIcon.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

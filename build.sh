@@ -62,6 +62,13 @@ if grep -q '\$(' "${APP}/Contents/Info.plist"; then
 fi
 plutil -lint "${APP}/Contents/Info.plist" >/dev/null
 
+if [ -f Resources/AppIcon.icns ]; then
+  echo "-> Copying the app icon"
+  cp Resources/AppIcon.icns "${APP}/Contents/Resources/AppIcon.icns"
+else
+  echo "-> No Resources/AppIcon.icns (run: swift make-icon.swift)"
+fi
+
 echo "-> Compiling"
 swiftc -O -target "$(uname -m)-apple-macos${DEPLOYMENT_TARGET}" \
   Sources/main.swift -o "$BIN" \

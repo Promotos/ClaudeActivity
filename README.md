@@ -35,7 +35,7 @@ xcodebuild -project ClaudeActivity.xcodeproj -scheme ClaudeActivity -configurati
 For a build without Xcode, only the Command Line Tools:
 
 ```bash
-chmod +x build.sh diagnose.sh benchmark.sh
+chmod +x build.sh
 ./build.sh
 open ClaudeActivity.app
 ```
@@ -49,11 +49,24 @@ Enable autostart from the app's menu ("Start at Login"); it writes a LaunchAgent
 ```
 Sources/main.swift          the entire app, no dependencies
 Resources/Info.plist        bundle metadata for the Xcode target
+Resources/AppIcon.icns      the app icon
 ClaudeActivity.xcodeproj    Xcode project (one app target)
 build.sh                    swiftc build without Xcode
-diagnose.sh                 checks the signal sources
-benchmark.sh                measures the CPU cost of nettop variants
+make-icon.swift             redraws Resources/AppIcon.icns
 ```
+
+The icon is drawn from code rather than stored as artwork, so it can be changed
+without an image editor:
+
+```bash
+swift make-icon.swift
+```
+
+That regenerates `Resources/AppIcon.icns` at all ten sizes `iconutil` expects,
+drawing each one at its native resolution instead of scaling a large rendition
+down. The colors and proportions sit at the top of `enum Icon`. The shapes are
+plain Bezier paths on purpose — Apple's license terms do not allow SF Symbols in
+app icons.
 
 ## How the detection works
 
@@ -85,10 +98,27 @@ Also important: `-l 0` does not mean "infinite with a pause". The app uses finit
 
 ## When something does not work
 
+The app writes a short log to `~/Library/Logs/ClaudeActivity.log`, recording
+starts, stops and every nettop restart — the first place to look if the icon
+disappears.
+
+To check the signal sources by hand, best while a response is streaming:
+
 ```bash
-./diagnose.sh    # processes, raw nettop output, transcript folder
-./benchmark.sh   # CPU cost of various nettop variants
+ps -axww -o pid=,args= | grep -i claude | grep -v grep
 ```
+
+```bash
+nettop -P -d -x -n -l 8 -s 1 -J bytes_in,bytes_out | grep -i claude
+```
+
+```bash
+find ~/.claude/projects -name '*.jsonl' -mmin -5
+```
+
+The first command shows which processes get classified, the second whether
+nettop reports traffic for them, the third whether Claude Code has written a
+transcript recently.
 
 The knobs are at the top of `Sources/main.swift` under `enum Config`:
 
