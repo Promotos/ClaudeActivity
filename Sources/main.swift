@@ -288,23 +288,38 @@ final class ProcessScanner {
     }
 
     /// Maps a command line to a source.
-    /// Order matters: Claude Code lives in
-    /// ~/Library/Application Support/Claude/claude-code/<version>/claude.app —
-    /// that path also contains "claude.app", so it has to be checked first.
+    ///
+    /// The three blocks below run in this order for a reason:
+    ///
+    /// 1. Unambiguous Claude Code markers. Claude Code lives in
+    ///    ~/Library/Application Support/Claude/claude-code/<version>/claude.app,
+    ///    a path that also contains "claude.app" — so "claude-code" has to win
+    ///    over the Desktop rule.
+    /// 2. Claude Desktop. Its Electron helpers are spawned with names like
+    ///    "Claude Helper --type=utility --utility-sub-type=node", which contain
+    ///    both "node" and "claude". They must be settled here, before the loose
+    ///    fallback below, or Desktop traffic ends up counted as Claude Code.
+    /// 3. A loose fallback for Claude Code installed through npm outside the
+    ///    known paths.
     static func classify(_ lower: String) -> Source? {
         if lower.contains("claudeactivity") { return nil }
         if lower.contains("claude usage") { return nil }   // third-party monitor app
         if lower.contains("nettop") || lower.hasPrefix("/bin/ps") { return nil }
+        // The Squirrel updater downloads app releases, not tokens.
+        if lower.contains("shipit") || lower.contains("squirrel") { return nil }
 
         if lower.contains("claude-code")
             || lower.contains(".claude/local")
-            || lower.contains("claude/cli.js")
-            || (lower.contains("node") && lower.contains("claude")) {
+            || lower.contains("claude/cli.js") {
             return .code
         }
 
         if lower.contains("/claude.app/") || lower.contains("claude helper") {
             return .desktop
+        }
+
+        if lower.contains("node") && lower.contains("claude") {
+            return .code
         }
 
         return nil
