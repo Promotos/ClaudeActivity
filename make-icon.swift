@@ -1,5 +1,6 @@
-// Generates Resources/AppIcon.icns — the app icon, drawn from code so it stays
-// reproducible and tweakable without a binary editor.
+// Generates Resources/AppIcon.icns (the app icon) and docs/icon.png (the same
+// artwork for the README), drawn from code so both stay reproducible and
+// tweakable without a binary editor.
 //
 //   swift make-icon.swift
 //
@@ -93,6 +94,7 @@ let variants: [(name: String, pixels: Int)] = [
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let iconset = root.appendingPathComponent("build/AppIcon.iconset")
 let output = root.appendingPathComponent("Resources/AppIcon.icns")
+let preview = root.appendingPathComponent("docs/icon.png")
 
 try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
@@ -115,3 +117,9 @@ guard iconutil.terminationStatus == 0 else {
 
 try? FileManager.default.removeItem(at: iconset)
 print("wrote \(output.path)")
+
+// Same artwork once more as a plain PNG, so the README can show it.
+try FileManager.default.createDirectory(at: preview.deletingLastPathComponent(),
+                                        withIntermediateDirectories: true)
+try Icon.png(pixels: 256).write(to: preview)
+print("wrote \(preview.path)")

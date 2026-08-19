@@ -1,5 +1,7 @@
 # ClaudeActivity
 
+<img src="docs/icon.png" alt="ClaudeActivity app icon" width="120" align="right">
+
 A macOS menu bar indicator that shows whether **Claude is currently exchanging tokens** — both in the **Claude Desktop app** and in **Claude Code**.
 
 | Display | Meaning |
@@ -50,6 +52,7 @@ Enable autostart from the app's menu ("Start at Login"); it writes a LaunchAgent
 Sources/main.swift          the entire app, no dependencies
 Resources/Info.plist        bundle metadata for the Xcode target
 Resources/AppIcon.icns      the app icon
+docs/icon.png               the same artwork for this README
 ClaudeActivity.xcodeproj    Xcode project (one app target)
 build.sh                    swiftc build without Xcode
 make-icon.swift             redraws Resources/AppIcon.icns
@@ -64,9 +67,10 @@ swift make-icon.swift
 
 That regenerates `Resources/AppIcon.icns` at all ten sizes `iconutil` expects,
 drawing each one at its native resolution instead of scaling a large rendition
-down. The colors and proportions sit at the top of `enum Icon`. The shapes are
-plain Bezier paths on purpose — Apple's license terms do not allow SF Symbols in
-app icons.
+down, and writes `docs/icon.png` alongside it so the image above never drifts
+from the icon actually shipped. The colors and proportions sit at the top of
+`enum Icon`. The shapes are plain Bezier paths on purpose — Apple's license terms
+do not allow SF Symbols in app icons.
 
 ## How the detection works
 
