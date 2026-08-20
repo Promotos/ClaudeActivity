@@ -28,9 +28,10 @@ import Foundation
 //      and Claude Code (node/claude CLI) — separated by direction.
 //   2) Changes to ~/.claude/projects/**/*.jsonl as a secondary signal for Claude Code.
 //
-// The measured volume is also summed per day and kept for 30 days in
-// ~/Library/Application Support/ClaudeActivity/usage-history.json, which feeds
-// the mirrored bar chart in the menu (sent upwards, received downwards).
+// The measured volume is also summed per day and kept for 90 days in
+// ~/Library/Application Support/ClaudeActivity/usage-history.json. The mirrored
+// bar chart in the menu (sent upwards, received downwards) shows the last 30 of
+// them.
 // ============================================================================
 
 // MARK: - Configuration
@@ -90,21 +91,25 @@ enum Config {
     static let blinkLowAlpha: CGFloat = 0.15
 
     // Usage history
-    /// How many days the daily counters are kept — also the width of the chart.
-    static let historyDays = 30
+    /// How many days of daily counters are kept on disk. More than the chart
+    /// shows, so the numbers are still there when the window is widened.
+    static let historyDays = 90
+    /// How many of them the chart in the menu shows.
+    static let chartDays = 30
     /// How often the history is flushed to disk while the app runs.
     static let historySaveInterval: TimeInterval = 60
 
     // Chart geometry (the menu item showing the history)
     /// Minimum width of the chart — it grows to the width of the menu.
     static let chartWidth: CGFloat = 300
-    static let chartHeight: CGFloat = 128
+    static let chartHeight: CGFloat = 122
     /// Reserved above the bars for the legend. The hover bubble needs no room of
     /// its own — it is drawn over the chart.
     static let chartTopBand: CGFloat = 26
-    /// Reserved below the bars for the first/last date label — wide enough to
-    /// keep it clear of both the plot backdrop and the menu item below.
-    static let chartBottomBand: CGFloat = 28
+    /// Reserved below the bars for the week ticks and their dates.
+    static let chartBottomBand: CGFloat = 22
+    /// Height of the tick that marks a Monday.
+    static let chartTickHeight: CGFloat = 4
     /// How far the plot backdrop reaches past the bars on every side.
     static let chartPanelPadding: CGFloat = 5
     static let chartInset: CGFloat = 12
@@ -271,8 +276,9 @@ struct DayUsage: Codable {
     }
 }
 
-/// Keeps a rolling 30-day window of daily byte counters on disk, so the menu can
-/// show a trend instead of only the totals since app start.
+/// Keeps a rolling window of daily byte counters on disk, so the menu can show a
+/// trend instead of only the totals since app start. The window on disk is
+/// longer than the one the chart draws.
 final class UsageHistory {
     static var fileURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -299,10 +305,11 @@ final class UsageHistory {
         lock.unlock()
     }
 
-    /// The last `count` days, oldest first. Days without traffic — and every day
-    /// before the app was ever installed — come back as zeroed entries, so the
+    /// The last `count` days, oldest first — 30 by default, the width of the
+    /// chart, while the file holds more. Days without traffic, and every day
+    /// before the app was ever installed, come back as zeroed entries, so the
     /// chart always has exactly `count` columns.
-    func recent(_ count: Int = Config.historyDays) -> [DayUsage] {
+    func recent(_ count: Int = Config.chartDays) -> [DayUsage] {
         lock.lock()
         let snapshot = days
         lock.unlock()
@@ -1167,10 +1174,13 @@ final class UsageTooltipView: NSView {
 /// popover would be swallowed by the menu's own event tracking.
 final class UsageChartView: NSView {
     private let days: [DayUsage]
-    /// Largest single-direction value in the window.
-    private let peak: Double
-    /// `peak` rounded up to a readable number — the end of both half axes.
-    private let scaleMax: Double
+    /// End of the axis per direction, rounded up from that direction's busiest
+    /// day. The two halves are scaled separately on purpose: sent and received
+    /// differ by orders of magnitude, and one shared scale presses the smaller
+    /// direction flat against the baseline. The labels on the left say so.
+    private let scaleMax: [Direction: Double]
+    /// Traffic of the busiest day, both directions together.
+    private let busiestDay: Double
     /// Room the axis labels need on the left.
     private let scaleWidth: CGFloat
     private var hoverIndex: Int?
@@ -1184,6 +1194,7 @@ final class UsageChartView: NSView {
     private static let panelColor = shade(light: 0.05, dark: 0.08)
     private static let hoverColor = shade(light: 0.11, dark: 0.16)
     private static let gridColor = shade(light: 0.10, dark: 0.14)
+    private static let tickColor = shade(light: 0.30, dark: 0.38)
 
     private static func shade(light: CGFloat, dark: CGFloat) -> NSColor {
         NSColor(name: nil) { appearance in
@@ -1196,8 +1207,8 @@ final class UsageChartView: NSView {
     static let scaleFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
 
     /// The three labels of the axis, top to bottom.
-    private static func axisLabels(_ max: Double) -> [String] {
-        max > 0 ? [formatBytes(max), "0", formatBytes(max)] : ["0"]
+    private static func axisLabels(_ scale: [Direction: Double]) -> [String] {
+        [formatBytes(scale[.outbound] ?? 0), "0", formatBytes(scale[.inbound] ?? 0)]
     }
 
     /// Rounds up to a readable multiple of a power of ten, so the axis ends on a
@@ -1212,7 +1223,7 @@ final class UsageChartView: NSView {
         return 10 * magnitude
     }
 
-    private static let axisDate: DateFormatter = {
+    private static let weekDate: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("dMMM")
         return f
@@ -1226,10 +1237,13 @@ final class UsageChartView: NSView {
 
     init(days: [DayUsage]) {
         self.days = days
-        let peak = days.map { max($0.totalOut, $0.totalIn) }.max() ?? 0
-        self.peak = peak
-        self.scaleMax = UsageChartView.niceCeiling(peak)
-        self.scaleWidth = UsageChartView.axisLabels(scaleMax).map {
+        let scale: [Direction: Double] = [
+            .outbound: UsageChartView.niceCeiling(days.map { $0.totalOut }.max() ?? 0),
+            .inbound: UsageChartView.niceCeiling(days.map { $0.totalIn }.max() ?? 0)
+        ]
+        self.scaleMax = scale
+        self.busiestDay = days.map { $0.totalOut + $0.totalIn }.max() ?? 0
+        self.scaleWidth = UsageChartView.axisLabels(scale).map {
             NSAttributedString(string: $0, attributes: [.font: UsageChartView.scaleFont]).size().width
         }.max().map { ceil($0) + 6 } ?? 0
         super.init(frame: NSRect(x: 0, y: 0, width: Config.chartWidth, height: Config.chartHeight))
@@ -1251,6 +1265,10 @@ final class UsageChartView: NSView {
                y: Config.chartBottomBand,
                width: bounds.width - 2 * Config.chartInset - scaleWidth,
                height: bounds.height - Config.chartBottomBand - Config.chartTopBand)
+    }
+
+    private var hasTraffic: Bool {
+        Direction.allCases.contains { (scaleMax[$0] ?? 0) > 0 }
     }
 
     private var columnWidth: CGFloat {
@@ -1327,7 +1345,7 @@ final class UsageChartView: NSView {
 
     /// The bubble hangs above the whole chart item, so it never covers a bar.
     private func updateTooltip() {
-        guard let index = hoverIndex, peak > 0, let window = window else {
+        guard let index = hoverIndex, hasTraffic, let window = window else {
             UsageTooltip.shared.hide()
             return
         }
@@ -1359,7 +1377,7 @@ final class UsageChartView: NSView {
                                                dy: -Config.chartPanelPadding),
                      xRadius: 6, yRadius: 6).fill()
 
-        guard peak > 0 else {
+        guard hasTraffic else {
             drawEmptyState(in: plot)
             drawLegend()
             return
@@ -1368,7 +1386,7 @@ final class UsageChartView: NSView {
         drawBars(in: plot)
         drawBaseline(in: plot)
         drawScale(in: plot)
-        drawAxisLabels(in: plot)
+        drawWeekTicks(in: plot)
 
         drawLegend()
     }
@@ -1390,20 +1408,22 @@ final class UsageChartView: NSView {
             }
 
             let alpha: CGFloat = (hoverIndex == nil || highlighted) ? 1.0 : 0.3
-            drawBar(day.totalOut, x: column.midX - barWidth / 2, width: barWidth,
+            drawBar(day.totalOut, scale: scaleMax[.outbound] ?? 0,
+                    x: column.midX - barWidth / 2, width: barWidth,
                     baseline: plot.midY, half: half, upwards: true,
                     color: UsageChartView.outColor.withAlphaComponent(alpha))
-            drawBar(day.totalIn, x: column.midX - barWidth / 2, width: barWidth,
+            drawBar(day.totalIn, scale: scaleMax[.inbound] ?? 0,
+                    x: column.midX - barWidth / 2, width: barWidth,
                     baseline: plot.midY, half: half, upwards: false,
                     color: UsageChartView.inColor.withAlphaComponent(alpha))
         }
     }
 
     /// A day with traffic always gets a visible stub, however small its share.
-    private func drawBar(_ value: Double, x: CGFloat, width: CGFloat, baseline: CGFloat,
-                         half: CGFloat, upwards: Bool, color: NSColor) {
-        guard value > 0 else { return }
-        let height = max(1.5, CGFloat(value / scaleMax) * half)
+    private func drawBar(_ value: Double, scale: Double, x: CGFloat, width: CGFloat,
+                         baseline: CGFloat, half: CGFloat, upwards: Bool, color: NSColor) {
+        guard value > 0, scale > 0 else { return }
+        let height = max(1.5, CGFloat(value / scale) * half)
         let rect = NSRect(x: x, y: upwards ? baseline : baseline - height,
                           width: width, height: height)
         let radius = min(1.5, width / 2)
@@ -1411,18 +1431,21 @@ final class UsageChartView: NSView {
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
     }
 
-    /// The value axis: the rounded maximum at either end, zero at the baseline.
-    /// Both halves share it, so a bar up and a bar down are directly comparable.
+    /// The value axis: each direction's own rounded maximum at its end of the
+    /// plot, zero at the baseline. Up and down are therefore *not* comparable by
+    /// height — the two numbers on the left are what makes them readable.
     private func drawScale(in plot: NSRect) {
-        guard scaleMax > 0 else { return }
+        guard hasTraffic else { return }
         let labels = UsageChartView.axisLabels(scaleMax)
         let levels = [plot.maxY, plot.midY, plot.minY]
+        // Tinted like the half they belong to — the clearest hint that the two
+        // ends of the axis are not the same scale.
+        let colors = [UsageChartView.outColor, NSColor.secondaryLabelColor, UsageChartView.inColor]
 
-        for (text, y) in zip(labels, levels) {
+        for ((text, y), color) in zip(zip(labels, levels), colors) {
             let string = NSAttributedString(
                 string: text,
-                attributes: [.font: UsageChartView.scaleFont,
-                             .foregroundColor: NSColor.secondaryLabelColor])
+                attributes: [.font: UsageChartView.scaleFont, .foregroundColor: color])
             let size = string.size()
             string.draw(at: NSPoint(x: plot.minX - Config.chartPanelPadding - 3 - size.width,
                                     y: y - size.height / 2))
@@ -1440,16 +1463,36 @@ final class UsageChartView: NSView {
         NSRect(x: plot.minX, y: plot.midY - 0.5, width: plot.width, height: 1).fill()
     }
 
-    /// Only the ends of the window are labelled — 30 dates would not fit.
-    private func drawAxisLabels(in plot: NSRect) {
-        guard let first = days.first?.date, let last = days.last?.date else { return }
-        let left = caption(UsageChartView.axisDate.string(from: first))
-        let right = caption(UsageChartView.axisDate.string(from: last))
-        // Centred between the bottom edge of the plot backdrop and the view edge,
-        // so the date neither touches the chart nor the item below it.
-        let y = (Config.chartBottomBand - Config.chartPanelPadding - left.size().height) / 2
-        left.draw(at: NSPoint(x: plot.minX, y: y))
-        right.draw(at: NSPoint(x: plot.maxX - right.size().width, y: y))
+    /// A short tick under every Monday with its date beside it. Enough to place
+    /// a column in time without writing 30 dates under the chart — the exact day
+    /// of a single column is one hover away.
+    private func drawWeekTicks(in plot: NSRect) {
+        let calendar = Calendar(identifier: .gregorian)
+        // The strip below the plot backdrop, shared by tick and date.
+        let strip = Config.chartBottomBand - Config.chartPanelPadding
+        let tickY = (strip - Config.chartTickHeight) / 2
+        var occupied = -CGFloat.greatestFiniteMagnitude
+
+        for (index, day) in days.enumerated() {
+            guard let date = day.date,
+                  calendar.component(.weekday, from: date) == 2 else { continue }
+
+            let x = (columnRect(index).midX - 0.5).rounded()
+            UsageChartView.tickColor.setFill()
+            NSRect(x: x, y: tickY, width: 1, height: Config.chartTickHeight).fill()
+
+            let label = caption(UsageChartView.weekDate.string(from: date))
+            let size = label.size()
+            // Normally behind the tick; a Monday close to the right edge gets its
+            // date in front of it instead.
+            var textX = x + 4
+            if textX + size.width > bounds.width - Config.chartInset {
+                textX = x - 4 - size.width
+            }
+            guard textX > occupied + 6 else { continue }
+            label.draw(at: NSPoint(x: textX, y: (strip - size.height) / 2))
+            occupied = textX + size.width
+        }
     }
 
     /// Which color means what, plus the scale of the chart.
@@ -1463,8 +1506,8 @@ final class UsageChartView: NSView {
         let y = plotRect.maxY + Config.chartPanelPadding + 3
         legend.draw(at: NSPoint(x: Config.chartInset, y: y))
 
-        if peak > 0 {
-            let busiest = caption("busiest day \(formatBytes(peak))")
+        if busiestDay > 0 {
+            let busiest = caption("busiest day \(formatBytes(busiestDay))")
             busiest.draw(at: NSPoint(x: bounds.width - Config.chartInset - busiest.size().width, y: y))
         }
     }
@@ -1740,7 +1783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(sectionHeader("Usage history · last \(Config.historyDays) days"))
+        menu.addItem(sectionHeader("Usage history · last \(Config.chartDays) days"))
         let chart = NSMenuItem()
         let chartView = UsageChartView(days: tracker.history.recent())
         chart.view = chartView

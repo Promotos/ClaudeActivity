@@ -17,9 +17,14 @@ Click the icon to open a menu with the status per source, the time since the las
 ## Usage history
 
 The menu carries a mirrored bar chart of the last 30 days: one column per day,
-**sent growing upwards**, **received growing downwards**, both halves on the same
-scale. The axis on the left ends on a rounded version of the busiest day, so the
-bars can be read as volumes rather than as relative heights.
+**sent growing upwards**, **received growing downwards**. A short tick under
+every Monday marks where a week starts.
+
+Each half has its **own scale**, ending on a rounded version of that direction's
+busiest day — sent and received differ by orders of magnitude here, and a shared
+scale would press the smaller direction flat against the baseline. The two
+numbers on the left are therefore different, and tinted like the half they belong
+to: a bar up and a bar down cannot be compared by height, only by their value.
 
 Hovering a column dims the rest and shows a bubble with that day's date, both
 directions, and the split between Claude Desktop and Claude Code. The bubble
@@ -29,8 +34,10 @@ describes.
 
 The daily counters are written to
 `~/Library/Application Support/ClaudeActivity/usage-history.json` — once a minute
-while the app runs and again when it quits — and days older than the window are
-dropped on every write. Delete that file to start the history over.
+while the app runs and again when it quits. The file keeps **90 days**; the chart
+draws the last 30 of them, so widening the window later does not start from an
+empty history. Anything older than 90 days is dropped on the next write. Delete
+the file to start the history over.
 
 ## Installation
 
@@ -195,7 +202,8 @@ The knobs are at the top of `Sources/main.swift` under `enum Config`:
 - `unitHysteresis` — how far below a boundary the rate has to fall before the unit drops back a step (15 %). Climbing happens right at the boundary.
 - `pulseInterval` — blink rate.
 - `sampleInterval` — nettop sampling rate; raise it to 2 if the load bothers you.
-- `historyDays` — length of the usage history and the width of the chart (30 days).
+- `historyDays` — how long the daily counters are kept on disk (90 days).
+- `chartDays` — how many of them the chart shows (30 days).
 - `historySaveInterval` — how often the history is flushed to disk (60 s).
 
 After changing anything, rebuild in Xcode or run `./build.sh` again.
