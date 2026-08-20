@@ -7,12 +7,30 @@ A macOS menu bar indicator that shows whether **Claude is currently exchanging t
 | Display | Meaning |
 |---|---|
 | `zzz` | no activity |
-| ▲ filled, blinking + rate | sent (prompt going out) |
-| ▼ filled, blinking + rate | received (response coming in) |
+| ▲ red, filled, blinking + rate | sent (prompt going out) |
+| ▼ blue, filled, blinking + rate | received (response coming in) |
 
-All icons are template images, so macOS tints them to match the menu bar — legible in both light and dark mode. Next to the arrows is the current rate (`938 B/s`, `1.2 kB/s`, `47 kB/s`, `1.8 MB/s`).
+The arrows carry the same two colors as the usage chart — red leaves the machine, blue comes back. The rate beside them (`938 B/s`, `1.2 kB/s`, `47 kB/s`, `1.8 MB/s`) and the idle `zzz` are drawn in the label color of the menu bar's own appearance, so they stay legible in light and dark mode.
 
-Click the icon to open a menu with the status per source, the time since the last exchange, the total volume since app start, and an autostart toggle.
+Click the icon to open a menu with the status per source, the time since the last exchange, the total volume since app start, a 30-day usage history, and an autostart toggle.
+
+## Usage history
+
+The menu carries a mirrored bar chart of the last 30 days: one column per day,
+**sent growing upwards**, **received growing downwards**, both halves on the same
+scale. The axis on the left ends on a rounded version of the busiest day, so the
+bars can be read as volumes rather than as relative heights.
+
+Hovering a column dims the rest and shows a bubble with that day's date, both
+directions, and the split between Claude Desktop and Claude Code. The bubble
+lives in a window of its own, one level above the menu — a menu clips its item
+views, so a bubble drawn inside the chart would have to cover the very bars it
+describes.
+
+The daily counters are written to
+`~/Library/Application Support/ClaudeActivity/usage-history.json` — once a minute
+while the app runs and again when it quits — and days older than the window are
+dropped on every write. Delete that file to start the history over.
 
 ## Installation
 
@@ -172,15 +190,21 @@ The knobs are at the top of `Sources/main.swift` under `enum Config`:
 
 - `thresholdIn` / `thresholdOut` — lower bound against keep-alives (250 / 150 B/s). Too high and short responses get swallowed; too low and the icon blinks constantly while idle.
 - `activityHold` — how long the arrow keeps glowing.
+- `sleepDelay` — how long the arrows stay before the icon falls back to `zzz` (10 s). Long enough that the pauses inside a conversation do not toggle the icon.
+- `rateAttack` / `rateRelease` — smoothing of the displayed rate: a burst appears almost at once, the fall-off is drawn out.
+- `unitHysteresis` — how far below a boundary the rate has to fall before the unit drops back a step (15 %). Climbing happens right at the boundary.
 - `pulseInterval` — blink rate.
 - `sampleInterval` — nettop sampling rate; raise it to 2 if the load bothers you.
+- `historyDays` — length of the usage history and the width of the chart (30 days).
+- `historySaveInterval` — how often the history is flushed to disk (60 s).
 
 After changing anything, rebuild in Xcode or run `./build.sh` again.
 
 ## Limitations
 
 - What is measured is the **network volume of the process**, not tokens. Sync, images and telemetry count towards it — the totals are an upper bound, not exact model usage.
-- The counters reset on every app start; nothing is persisted.
+- The totals in the menu reset on every app start. Only the daily history survives, and it starts counting the day the app is first run.
+- Traffic is booked on the day it is measured, in local time — a session running past midnight is split across two columns.
 - With an active VPN or proxy, the process attribution from `nettop` can become inaccurate.
 
 For **usage and limits** (percentages, cost, remaining quota) there are ready-made apps that read `~/.claude` — for example [CCSeva](https://github.com/Iamshankhadeep/ccseva) or [TokenEater](https://github.com/AThevon/TokenEater). They run alongside this one without any problem.
